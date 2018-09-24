@@ -46,6 +46,8 @@ int main (int argc, char *argv[])
   task_create (&Pung, Body, "                    Pung") ;
   task_setprio (&Pung, 8);
 
+    printf("asdasd\n");
+
   task_yield () ;
 
   printf ("Main FIM\n");

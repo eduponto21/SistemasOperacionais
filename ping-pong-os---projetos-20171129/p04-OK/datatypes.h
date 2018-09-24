@@ -12,7 +12,10 @@
 #define SUSPENSA 's'//Tarefa suspensa
 #define PRONTA 'p'//Tarefa pronta
 #define ENCERRADA 'e'//Tarefa encerrada
-
+#define MAX_PRIORITY -20
+#define MIN_PRIORITY 20
+#define TASK_AGING -1
+#define TASK_DEFAULT_PRIORITY 0
 
 // Estrutura que define uma tarefa
 typedef struct task_t
@@ -21,7 +24,7 @@ typedef struct task_t
     struct task_t *prev, *next;     //para usar com biblioteca de filas (cast)
     int tid;  //ID da tarefa
     char estado; //Estado da tarefa
-    int prioridade;
+    int prioridade_estatica, prioridade_dinamica;
     //....   demais informações da tarefa
     ucontext_t context;
 } task_t ;

@@ -5,11 +5,6 @@
 #include "queue.h"
 #define STACKSIZE 32768		/* tamanho de pilha das threads */
 //#define DEBUG
-#define MAX_PRIORITY 20
-#define MIN_PRIORITY -20
-#define TASK_AGING -1
-#define TASK_DEFAULT_PRIORITY 0
-
 
 //Variável que controla IDs que já foram utilizados
 int IDS;
@@ -44,10 +39,8 @@ void pingpong_init ()
 
 void dispatcher_body (void * arg) // dispatcher é uma tarefa
 {
-    printf("oi eu sou o dispatcher\n");
     while ( queue_size((queue_t*)prontas) > 0 )
     {
-        printf("oi eu to dentro do while\n");
         task_t *next = scheduler() ; // scheduler é uma função
         if (next != NULL)
         {
@@ -64,14 +57,23 @@ task_t* scheduler()
     // Procura a tarefa com a maior prioridade na fila de prontas
     do
     {
-        if(maxPriority == NULL || check->prioridade > maxPriority->prioridade) {
+        if(maxPriority == NULL)
+        {
             maxPriority = check;
+        }
+        else if(check->prioridade_dinamica <= maxPriority->prioridade_dinamica)
+        {
+            maxPriority->prioridade_dinamica = maxPriority->prioridade_dinamica + TASK_AGING;
+            maxPriority = check;
+        } else
+        {
+            check->prioridade_dinamica = check->prioridade_dinamica + TASK_AGING;
         }
         check = check->next;
     }
     while(check != prontas);
     // Envelhece a tarefa assim que a escolhe como próxia para ser executada
-    task_setprio(maxPriority, task_getprio(maxPriority) + TASK_AGING);
+    maxPriority->prioridade_dinamica = maxPriority->prioridade_estatica;
     return maxPriority;
 }
 
@@ -83,7 +85,6 @@ int task_create (task_t *task,			// descritor da nova tarefa
                  void (*start_func)(void *),	// funcao corpo da tarefa
                  void *arg) 			// argumentos para a tarefa
 {
-    printf("criei");
     char *stack;
     getcontext(&task->context);
     stack = malloc (STACKSIZE);
@@ -127,21 +128,16 @@ void task_exit (int exitCode)
 #ifdef DEBUG
     printf ("task_exit: tarefa %d sendo encerrada\n", task_id()) ;
 #endif
-
-    if(CurrentTask != &Dispatcher) {
-        CurrentTask->estado = ENCERRADA;
-        queue_append((queue_t **) &encerradas, (queue_t*) CurrentTask);
-    }
-
-
     if(CurrentTask == &Dispatcher)
     {
         task_switch(&MainTask);
-    }else
+    }
+    else
     {
+        CurrentTask->estado = ENCERRADA;
+        queue_append((queue_t **) &encerradas, (queue_t*) CurrentTask);
         task_switch(&Dispatcher);
     }
-
 }
 
 // alterna a execução para a tarefa indicada
@@ -158,7 +154,6 @@ int task_switch (task_t *task)
     {
         return i;
     }
-
 }
 
 // retorna o identificador da tarefa corrente (main eh 0)
@@ -192,27 +187,38 @@ void task_yield ()
 // define a prioridade estática de uma tarefa (ou a tarefa atual)
 void task_setprio (task_t *task, int prio)
 {
-    if(prio > MAX_PRIORITY) {
+    //valida limites
+    if(prio < MAX_PRIORITY)
+    {
         prio = MAX_PRIORITY;
-    } else if(prio < MIN_PRIORITY) {
+    }
+    else if(prio > MIN_PRIORITY)
+    {
         prio = MIN_PRIORITY;
     }
 
-    if(task) {
-        task->prioridade = prio;
-    } else {
-        CurrentTask->prioridade = prio;
+    if(task)
+    {
+        task->prioridade_estatica = prio;
+        task->prioridade_dinamica = prio;
     }
-
+    else
+    {
+        CurrentTask->prioridade_estatica = prio;
+        CurrentTask->prioridade_dinamica = prio;
+    }
 }
 
 // retorna a prioridade estática de uma tarefa (ou a tarefa atual)
 int task_getprio (task_t *task)
 {
-    if(task) {
-        return task->prioridade;
-    } else {
-        return CurrentTask->prioridade;
+    if(task)
+    {
+        return task->prioridade_estatica;
+    }
+    else
+    {
+        return CurrentTask->prioridade_estatica;
     }
 }
 

@@ -107,14 +107,13 @@ void task_exit (int exitCode)
 #ifdef DEBUG
     printf ("task_exit: tarefa %d sendo encerrada\n", task_id()) ;
 #endif
-    CurrentTask->estado = ENCERRADA;
-    queue_append((queue_t **) &encerradas, (queue_t*) CurrentTask);
-
     if(CurrentTask == &Dispatcher)
     {
         task_switch(&MainTask);
     }else
     {
+        CurrentTask->estado = ENCERRADA;
+        queue_append((queue_t **) &encerradas, (queue_t*) CurrentTask);
         task_switch(&Dispatcher);
     }
 
