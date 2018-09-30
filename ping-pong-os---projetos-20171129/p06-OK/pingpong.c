@@ -7,7 +7,7 @@
 //#define DEBUG
 
 //Variável que controla IDs que já foram utilizados
-int IDS;
+int IDS, ticks;
 task_t MainTask, Dispatcher, *CurrentTask, *prontas, *suspensas, *encerradas;
 // estrutura que define um tratador de sinal (deve ser global ou static)
 struct sigaction action;
@@ -32,6 +32,7 @@ void pingpong_init ()
 
     //inicializa variável que controla IDS
     IDS = 0;
+    ticks = 0;
     prontas = NULL;
     suspensas = NULL;
     encerradas = NULL;
@@ -51,7 +52,7 @@ void pingpong_init ()
     }
 
     //Ajusta temporizador
-    timer.it_value.tv_usec = 1000 ;      // primeiro disparo, em micro-segundos
+    timer.it_value.tv_usec = 1000;      // primeiro disparo, em micro-segundos
     timer.it_value.tv_sec  = 0 ;      // primeiro disparo, em segundos
     timer.it_interval.tv_usec = 1000 ;   // disparos subsequentes, em micro-segundos
     timer.it_interval.tv_sec  = 0 ;   // disparos subsequentes, em segundos
@@ -73,6 +74,7 @@ void dispatcher_body (void * arg) // dispatcher é uma tarefa
         if (next != NULL)
         {
             queue_remove((queue_t**)&prontas,(queue_t*)next);
+            next->quantum = DEFAULT_QUANTUM;
             task_switch (next) ; // transfere controle para a tarefa "next"
         }
     }
@@ -89,7 +91,7 @@ task_t* scheduler()
         {
             maxPriority = check;
         }
-        else if(check->prioridade_dinamica <= maxPriority->prioridade_dinamica)
+        else if(check->prioridade_dinamica < maxPriority->prioridade_dinamica)
         {
             maxPriority->prioridade_dinamica = maxPriority->prioridade_dinamica + TASK_AGING;
             maxPriority = check;
@@ -131,8 +133,9 @@ int task_create (task_t *task,			// descritor da nova tarefa
         task_setprio(task, TASK_DEFAULT_PRIORITY);
         //Por padrão, toda tarefa é de usuário, a não ser que mude em outro lugar
         task->tipo = TAREFA_DE_USUARIO;
-        //inicializa quantum padrão da tarefa
-        task->quantum = DEFAULT_QUANTUM;
+        task->initTime = systime();
+        task->procTime = 0;
+        task->executions = 0;
     }
     else
     {
@@ -161,6 +164,9 @@ void task_exit (int exitCode)
 #ifdef DEBUG
     printf ("task_exit: tarefa %d sendo encerrada\n", task_id()) ;
 #endif
+    CurrentTask->endTime = systime();
+    printf ("\nTask %d exit: execution time %d ms, processor time %d ms, %d activations\n\n",
+        task_id(), CurrentTask->endTime-CurrentTask->initTime, CurrentTask->procTime, CurrentTask->executions) ;
     if(CurrentTask == &Dispatcher)
     {
         task_switch(&MainTask);
@@ -213,6 +219,8 @@ void task_yield ()
     {
         queue_append((queue_t**)&prontas,(queue_t*)CurrentTask);
     }
+    CurrentTask->executions++;
+    Dispatcher.executions++;
     task_switch(&Dispatcher);
 
 }
@@ -258,6 +266,8 @@ int task_getprio (task_t *task)
 //
 void tratador_de_sinal (int signum)
 {
+    ticks++;
+    CurrentTask->procTime++;
     //Somente decrementa de tarefas de usuario, para evitar instabilidade
     if(CurrentTask->tipo == TAREFA_DE_USUARIO)
     {
@@ -265,12 +275,16 @@ void tratador_de_sinal (int signum)
         //Se acabar o quantum da tarefa, reseta e retorna ao dispatcher
         if (CurrentTask->quantum == 0)
         {
-            CurrentTask->quantum = DEFAULT_QUANTUM;
             task_yield();
         }
     }
 }
 
+// retorna o relógio atual (em milisegundos)
+unsigned int systime ()
+{
+    return ticks;
+}
 
 // operações de sincronização ==================================================
 
@@ -281,9 +295,6 @@ int task_join (task_t *task) ;
 
 // suspende a tarefa corrente por t segundos
 void task_sleep (int t) ;
-
-// retorna o relógio atual (em milisegundos)
-unsigned int systime () ;
 
 // operações de IPC ============================================================
 
