@@ -27,19 +27,60 @@ void pingpong_init ()
     // desativa o buffer da saida padrao (stdout), usado pela função printf
     setvbuf(stdout,0, _IONBF,0);
 
-    getcontext(&MainTask.context);
-    CurrentTask = &MainTask;
-
-    //inicializa variável que controla IDS
-    IDS = 0;
+     //inicializa variável que controla IDS
+    IDS = -1;
     ticks = 0;
     prontas = NULL;
     suspensas = NULL;
     encerradas = NULL;
 
+    int id;
+
+    //cria main
+    char *stack;
+    getcontext(&MainTask.context);
+    CurrentTask = &MainTask;
+    stack = malloc (STACKSIZE);
+
+    if (stack)
+    {
+//        MainTask.context.uc_stack.ss_sp = stack ;
+//        MainTask.context.uc_stack.ss_size = STACKSIZE;
+//        MainTask.context.uc_stack.ss_flags = 0;
+//        MainTask.context.uc_link = &MainTask.next->context;
+        MainTask.tid = ++IDS;
+        MainTask.next = NULL;
+        MainTask.prev = NULL;
+        MainTask.estado = PRONTA;
+        task_setprio(&MainTask, TASK_DEFAULT_PRIORITY);
+        //Por padrão, toda tarefa é de usuário, a não ser que mude em outro lugar
+        MainTask.tipo = TAREFA_DE_USUARIO;
+        MainTask.initTime = systime();
+        MainTask.procTime = 0;
+        MainTask.executions = 0;
+    }
+    else
+    {
+        perror ("Erro na criação da pilha: ");
+        exit (1);
+    }
+
+//    queue_append((queue_t **) &prontas, (queue_t*) &MainTask);
+
+    if(id != 0) {
+        perror ("Erro ao criar main: ");
+        exit (1);
+    }
+
     //cria Dispatcher
-    int id = task_create(&Dispatcher, dispatcher_body, "");
+    id = task_create(&Dispatcher, dispatcher_body, "");
     Dispatcher.tipo = TAREFA_DE_SISTEMA;
+
+    if(id != 1) {
+        perror ("Erro ao criar dispatcher: ");
+        exit (1);
+    }
+
 
     //Cria Timer
     action.sa_handler = tratador_de_sinal;
@@ -64,6 +105,8 @@ void pingpong_init ()
         exit (1) ;
     }
 
+    //abre dispatcher
+    task_yield();
 }
 
 void dispatcher_body (void * arg) // dispatcher é uma tarefa
@@ -226,10 +269,10 @@ void task_resume (task_t *task) ;
 // prontas ("ready queue")
 void task_yield ()
 {
-    if(CurrentTask != &MainTask)
-    {
+//    if(CurrentTask != &MainTask)
+//    {
         queue_append((queue_t**)&prontas,(queue_t*)CurrentTask);
-    }
+//    }
 //    CurrentTask->executions++;
 //    Dispatcher.executions++;
     task_switch(&Dispatcher);
