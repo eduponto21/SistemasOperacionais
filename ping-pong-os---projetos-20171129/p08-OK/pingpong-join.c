@@ -21,7 +21,7 @@ void Body (void * arg)
    for (i=0; i<max; i++)
    {
       printf ("%s %d\n", (char *) arg, i) ;
-      for (j=0; j<10000000; j++) ;
+      for (j=0; j<90000000; j++) ;
    }
    printf ("%s FIM\n", (char *) arg) ;
    task_exit (max) ;

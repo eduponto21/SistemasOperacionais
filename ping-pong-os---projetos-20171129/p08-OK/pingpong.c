@@ -8,7 +8,7 @@
 
 //Variável que controla IDs que já foram utilizados
 int IDS, ticks;
-task_t MainTask, Dispatcher, *CurrentTask, *prontas, *suspensas, *encerradas;
+task_t MainTask, Dispatcher, *CurrentTask, *prontas, *encerradas;
 // estrutura que define um tratador de sinal (deve ser global ou static)
 struct sigaction action;
 // estrutura de inicialização to timer
@@ -31,41 +31,25 @@ void pingpong_init ()
     IDS = -1;
     ticks = 0;
     prontas = NULL;
-    suspensas = NULL;
     encerradas = NULL;
 
     int id;
 
     //cria main
-    char *stack;
     getcontext(&MainTask.context);
     CurrentTask = &MainTask;
-    stack = malloc (STACKSIZE);
 
-    if (stack)
-    {
-//        MainTask.context.uc_stack.ss_sp = stack ;
-//        MainTask.context.uc_stack.ss_size = STACKSIZE;
-//        MainTask.context.uc_stack.ss_flags = 0;
-//        MainTask.context.uc_link = &MainTask.next->context;
-        MainTask.tid = ++IDS;
-        MainTask.next = NULL;
-        MainTask.prev = NULL;
-        MainTask.estado = PRONTA;
-        task_setprio(&MainTask, TASK_DEFAULT_PRIORITY);
-        //Por padrão, toda tarefa é de usuário, a não ser que mude em outro lugar
-        MainTask.tipo = TAREFA_DE_USUARIO;
-        MainTask.initTime = systime();
-        MainTask.procTime = 0;
-        MainTask.executions = 0;
-    }
-    else
-    {
-        perror ("Erro na criação da pilha: ");
-        exit (1);
-    }
+    MainTask.tid = ++IDS;
+    MainTask.next = NULL;
+    MainTask.prev = NULL;
+    MainTask.estado = PRONTA;
+    task_setprio(&MainTask, TASK_DEFAULT_PRIORITY);
+    //Por padrão, toda tarefa é de usuário, a não ser que mude em outro lugar
+    MainTask.tipo = TAREFA_DE_USUARIO;
+    MainTask.initTime = systime();
+    MainTask.procTime = 0;
+    MainTask.executions = 0;
 
-//    queue_append((queue_t **) &prontas, (queue_t*) &MainTask);
 
     if(id != 0) {
         perror ("Erro ao criar main: ");
@@ -212,16 +196,18 @@ void task_exit (int exitCode)
     CurrentTask->endTime = systime();
     printf ("\nTask %d exit: execution time %d ms, processor time %d ms, %d activations\n\n",
         task_id(), CurrentTask->endTime-CurrentTask->initTime, CurrentTask->procTime, CurrentTask->executions) ;
-//    if(CurrentTask == &Dispatcher)
-//    {
-//        task_switch(&MainTask);
-//    }
-//    else
-//    {
-        CurrentTask->estado = ENCERRADA;
-        queue_append((queue_t **) &encerradas, (queue_t*) CurrentTask);
-        task_switch(&Dispatcher);
-//    }
+
+    CurrentTask->exitCode = exitCode;
+
+    while(queue_size((queue_t*)CurrentTask->suspensas) > 0) {
+        task_resume(CurrentTask->suspensas);
+    }
+
+    CurrentTask->estado = ENCERRADA;
+    queue_append((queue_t **) &encerradas, (queue_t*) CurrentTask);
+
+
+    task_yield();
 }
 
 // alterna a execução para a tarefa indicada
@@ -257,11 +243,29 @@ int task_id ()
 
 // suspende uma tarefa, retirando-a de sua fila atual, adicionando-a à fila
 // queue e mudando seu estado para "suspensa"; usa a tarefa atual se task==NULL
-void task_suspend (task_t *task, task_t **queue) ;
+void task_suspend (task_t *task, task_t **queue)
+{
+    if(task == NULL)
+    {
+        task = CurrentTask;
+    }
+
+    if(queue != NULL)
+    {
+        task->estado = SUSPENSA;
+        queue_append((queue_t **) queue, (queue_t*) task);
+    }
+}
 
 // acorda uma tarefa, retirando-a de sua fila atual, adicionando-a à fila de
 // tarefas prontas ("ready queue") e mudando seu estado para "pronta"
-void task_resume (task_t *task) ;
+void task_resume (task_t *task)
+{
+    queue_remove((queue_t **) &CurrentTask->suspensas, (queue_t*) task);
+    task->estado = PRONTA;
+    queue_append((queue_t **) &prontas, (queue_t*) task);
+
+}
 
 // operações de escalonamento ==================================================
 
@@ -269,14 +273,13 @@ void task_resume (task_t *task) ;
 // prontas ("ready queue")
 void task_yield ()
 {
-//    if(CurrentTask != &MainTask)
-//    {
+    if(CurrentTask->estado == PRONTA)
+    {
         queue_append((queue_t**)&prontas,(queue_t*)CurrentTask);
-//    }
+    }
 //    CurrentTask->executions++;
 //    Dispatcher.executions++;
     task_switch(&Dispatcher);
-
 }
 
 // define a prioridade estática de uma tarefa (ou a tarefa atual)
@@ -343,7 +346,22 @@ unsigned int systime ()
 // operações de sincronização ==================================================
 
 // a tarefa corrente aguarda o encerramento de outra task
-int task_join (task_t *task) ;
+int task_join (task_t *task)
+{
+    if(task == NULL)
+    {
+        return -1;
+    }else if(task->estado == ENCERRADA)
+    {
+        return task->exitCode;
+    }else
+    {
+        task_suspend(CurrentTask, &task->suspensas);
+        task_yield();
+        return task->exitCode;
+    }
+
+}
 
 // operações de gestão do tempo ================================================
 
