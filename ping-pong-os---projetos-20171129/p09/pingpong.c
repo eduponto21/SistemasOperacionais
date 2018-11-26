@@ -104,7 +104,6 @@ void dispatcher_body (void * arg) // dispatcher é uma tarefa
     while ( queue_size((queue_t*)prontas) > 0 )
     {
         task_t *next = scheduler() ; // scheduler é uma função
-        task_wakeUp();
         if (next != NULL)
         {
             queue_remove((queue_t**)&prontas,(queue_t*)next);
@@ -113,6 +112,7 @@ void dispatcher_body (void * arg) // dispatcher é uma tarefa
             Dispatcher.executions++;
             task_switch (next) ; // transfere controle para a tarefa "next"
         }
+        task_wakeUp();
     }
     task_exit(0) ; // encerra a tarefa dispatcher
 }
@@ -388,26 +388,25 @@ void task_sleep (int t)
 void task_wakeUp ()
 {
     //  Percorre lista de adormecidas acordando quem precisar
-    if(queue_size((queue_t*)adormecidas) == 0)
+    if(queue_size((queue_t*)adormecidas) > 0)
     {
-        return;
-    }
-
-    task_t *check = adormecidas;
-    task_t continueReference;
-    do
-    {
-        continueReference = *check->next;
-        if(check->wakeTime >= ticks)
+        task_t *check;
+        do
         {
-            queue_remove((queue_t**)&adormecidas,(queue_t*)check);
-            check->estado = PRONTA;
-            queue_append((queue_t **) &prontas, (queue_t*)check);
+            check = adormecidas;
+            if(check->wakeTime >= systime())
+            {
+                queue_remove((queue_t**)&adormecidas,(queue_t*)check);
+                check->estado = PRONTA;
+                queue_append((queue_t **)&prontas, (queue_t*)check);
+            }
+            else
+            {
+                check = adormecidas->next;
+            }
         }
-        check = &continueReference;
+        while(check != adormecidas && queue_size((queue_t*)adormecidas) > 0);
     }
-    while(check != adormecidas);
-
 }
 
 // operações de IPC ============================================================
