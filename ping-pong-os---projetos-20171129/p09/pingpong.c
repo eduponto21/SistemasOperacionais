@@ -14,8 +14,6 @@ struct sigaction action;
 // estrutura de inicialização to timer
 struct itimerval timer;
 
-void task_wakeUp();
-
 // funções gerais ==============================================================
 
 // Inicializa o sistema operacional; deve ser chamada no inicio do main()
@@ -29,12 +27,11 @@ void pingpong_init ()
     // desativa o buffer da saida padrao (stdout), usado pela função printf
     setvbuf(stdout,0, _IONBF,0);
 
-    //inicializa variável que controla IDS
+     //inicializa variável que controla IDS
     IDS = -1;
     ticks = 0;
     prontas = NULL;
     encerradas = NULL;
-    adormecidas = NULL;
 
     int id;
 
@@ -54,8 +51,7 @@ void pingpong_init ()
     MainTask.executions = 0;
 
 
-    if(id != 0)
-    {
+    if(id != 0) {
         perror ("Erro ao criar main: ");
         exit (1);
     }
@@ -64,8 +60,7 @@ void pingpong_init ()
     id = task_create(&Dispatcher, dispatcher_body, "");
     Dispatcher.tipo = TAREFA_DE_SISTEMA;
 
-    if(id != 1)
-    {
+    if(id != 1) {
         perror ("Erro ao criar dispatcher: ");
         exit (1);
     }
@@ -100,7 +95,6 @@ void pingpong_init ()
 
 void dispatcher_body (void * arg) // dispatcher é uma tarefa
 {
-
     while ( queue_size((queue_t*)prontas) > 0 )
     {
         task_t *next = scheduler() ; // scheduler é uma função
@@ -112,7 +106,24 @@ void dispatcher_body (void * arg) // dispatcher é uma tarefa
             Dispatcher.executions++;
             task_switch (next) ; // transfere controle para a tarefa "next"
         }
-        task_wakeUp();
+        if(adormecidas != NULL)
+        {
+            task_t *check;
+            do{
+                check = adormecidas;
+                if(check->wakeTime <= systime())
+                {
+                    queue_remove((queue_t **)&adormecidas, (queue_t *) check);
+                    check->estado= PRONTA;
+                    queue_append((queue_t **)&prontas, (queue_t *) check);
+                }
+                else
+                {
+                    check = adormecidas->next;
+                }
+            }while((adormecidas!=NULL) && (check!=adormecidas));
+        }
+
     }
     task_exit(0) ; // encerra a tarefa dispatcher
 }
@@ -202,12 +213,11 @@ void task_exit (int exitCode)
 #endif
     CurrentTask->endTime = systime();
     printf ("\nTask %d exit: execution time %d ms, processor time %d ms, %d activations\n\n",
-            task_id(), CurrentTask->endTime-CurrentTask->initTime, CurrentTask->procTime, CurrentTask->executions) ;
+        task_id(), CurrentTask->endTime-CurrentTask->initTime, CurrentTask->procTime, CurrentTask->executions) ;
 
     CurrentTask->exitCode = exitCode;
 
-    while(queue_size((queue_t*)CurrentTask->suspensas) > 0)
-    {
+    while(queue_size((queue_t*)CurrentTask->suspensas) > 0) {
         task_resume(CurrentTask->suspensas);
     }
 
@@ -359,12 +369,10 @@ int task_join (task_t *task)
     if(task == NULL)
     {
         return -1;
-    }
-    else if(task->estado == ENCERRADA)
+    }else if(task->estado == ENCERRADA)
     {
         return task->exitCode;
-    }
-    else
+    }else
     {
         task_suspend(CurrentTask, &task->suspensas);
         task_yield();
@@ -378,35 +386,10 @@ int task_join (task_t *task)
 // suspende a tarefa corrente por t segundos
 void task_sleep (int t)
 {
-    int wakeTimeMilisecs = ticks + (t * 1000);
-    CurrentTask->wakeTime = wakeTimeMilisecs;
+    CurrentTask->wakeTime = systime() + (t * 1000);
     CurrentTask->estado = ADORMECIDA;
     queue_append((queue_t **) &adormecidas, (queue_t*) CurrentTask);
     task_yield();
-}
-
-void task_wakeUp ()
-{
-    //  Percorre lista de adormecidas acordando quem precisar
-    if(queue_size((queue_t*)adormecidas) > 0)
-    {
-        task_t *check;
-        do
-        {
-            check = adormecidas;
-            if(check->wakeTime >= systime())
-            {
-                queue_remove((queue_t**)&adormecidas,(queue_t*)check);
-                check->estado = PRONTA;
-                queue_append((queue_t **)&prontas, (queue_t*)check);
-            }
-            else
-            {
-                check = adormecidas->next;
-            }
-        }
-        while(check != adormecidas && queue_size((queue_t*)adormecidas) > 0);
-    }
 }
 
 // operações de IPC ============================================================
