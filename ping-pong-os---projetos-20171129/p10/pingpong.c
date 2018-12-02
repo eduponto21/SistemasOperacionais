@@ -437,7 +437,7 @@ int sem_down (semaphore_t *s)
     if(s->cont < 0)
     {
         CurrentTask->estado = SUSPENSA;
-        queue_append((queue_t**)&s->fila, (queue_t*)CurrentTask);
+        queue_append((queue_t**)&(s->fila), (queue_t*)CurrentTask);
         flag_preempcao = 0;
         task_yield();
     }
@@ -458,11 +458,9 @@ int sem_up (semaphore_t *s)
     if(s->cont < 0)
     {
         task_t* task = s->fila;
-        queue_remove((queue_t**)s->fila, (queue_t*)task);
+        queue_remove((queue_t**)&s->fila, (queue_t*)task);
         task->estado = PRONTA;
         queue_append((queue_t**)&prontas, (queue_t*)task);
-        flag_preempcao = 0;
-        task_yield();
     }
     flag_preempcao = 0;
     return 0;
