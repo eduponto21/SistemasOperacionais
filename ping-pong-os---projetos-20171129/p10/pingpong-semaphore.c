@@ -7,7 +7,7 @@ semaphore_t s1, s2 ;
 
 void TaskA (void * arg)
 {
-   int i ;
+   int i;
    for (i=0; i<10; i++)
    {
       sem_down (&s1) ;

@@ -7,7 +7,7 @@
 //#define DEBUG
 
 //Variável que controla IDs que já foram utilizados
-int IDS, ticks;
+int IDS, ticks, flag_preempcao;
 task_t MainTask, Dispatcher, *CurrentTask, *prontas, *encerradas, *adormecidas;
 // estrutura que define um tratador de sinal (deve ser global ou static)
 struct sigaction action;
@@ -30,6 +30,7 @@ void pingpong_init ()
      //inicializa variável que controla IDS
     IDS = -1;
     ticks = 0;
+    flag_preempcao = 0;
     prontas = NULL;
     encerradas = NULL;
 
@@ -121,7 +122,7 @@ void dispatcher_body (void * arg) // dispatcher é uma tarefa
                 {
                     check = adormecidas->next;
                 }
-            }while((adormecidas!=NULL) && (check!=adormecidas));
+            }while((check!=adormecidas) && (adormecidas!=NULL));
         }
 
     }
@@ -291,13 +292,14 @@ void task_resume (task_t *task)
 // prontas ("ready queue")
 void task_yield ()
 {
-    if(CurrentTask->estado == PRONTA)
+    if(flag_preempcao == 0 && CurrentTask != &Dispatcher)
     {
-        queue_append((queue_t**)&prontas,(queue_t*)CurrentTask);
+        if(CurrentTask->estado == PRONTA)
+        {
+            queue_append((queue_t**)&prontas,(queue_t*)CurrentTask);
+        }
+        task_switch(&Dispatcher);
     }
-//    CurrentTask->executions++;
-//    Dispatcher.executions++;
-    task_switch(&Dispatcher);
 }
 
 // define a prioridade estática de uma tarefa (ou a tarefa atual)
@@ -386,9 +388,11 @@ int task_join (task_t *task)
 // suspende a tarefa corrente por t segundos
 void task_sleep (int t)
 {
-    CurrentTask->wakeTime = systime() + (t * 1000);
+    flag_preempcao = 1;
+    CurrentTask->wakeTime = systime()+t*1000;
     CurrentTask->estado = ADORMECIDA;
     queue_append((queue_t **) &adormecidas, (queue_t*) CurrentTask);
+    flag_preempcao = 0;
     task_yield();
 }
 
