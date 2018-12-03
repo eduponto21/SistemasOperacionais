@@ -203,8 +203,8 @@ void task_exit (int exitCode)
     printf ("task_exit: tarefa %d sendo encerrada\n", task_id()) ;
 #endif
     CurrentTask->endTime = systime();
-//    printf ("\nTask %d exit: execution time %d ms, processor time %d ms, %d activations\n\n",
-//            task_id(), CurrentTask->endTime-CurrentTask->initTime, CurrentTask->procTime, CurrentTask->executions) ;
+    printf ("\nTask %d exit: execution time %d ms, processor time %d ms, %d activations\n\n",
+            task_id(), CurrentTask->endTime-CurrentTask->initTime, CurrentTask->procTime, CurrentTask->executions) ;
 
     CurrentTask->exitCode = exitCode;
 
@@ -456,7 +456,7 @@ int sem_up (semaphore_t *s)
 
     flag_preempcao = 1;
     s->cont = s->cont + 1;
-    if(s->cont < 0)
+    if(s->cont <= 0)
     {
         task_t* task = s->fila;
         queue_remove((queue_t**)&s->fila, (queue_t*)task);
@@ -566,7 +566,7 @@ int barrier_destroy (barrier_t *b)
 // cria uma fila para até max mensagens de size bytes cada
 int mqueue_create (mqueue_t *queue, int max, int size)
 {
-    if(queue == NULL || max <= 0 || size > max || size <= 0)
+    if(queue == NULL)
     {
         return -1;
     }
@@ -574,6 +574,7 @@ int mqueue_create (mqueue_t *queue, int max, int size)
     sem_create(&(queue->buffer), 1);
     sem_create(&(queue->item), 0);
     sem_create(&(queue->vaga), max);
+
     queue->tam = size;
     queue->qnt = 0;
     queue->mensagens = (void*)malloc(size * max);
@@ -585,7 +586,7 @@ int mqueue_create (mqueue_t *queue, int max, int size)
 // envia uma mensagem para a fila
 int mqueue_send (mqueue_t *queue, void *msg)
 {
-    if(queue == NULL || msg == NULL || (queue->qnt + 1) * queue->tam > queue->arraySize)
+    if(queue == NULL)
     {
         return -1;
     }
@@ -598,6 +599,7 @@ int mqueue_send (mqueue_t *queue, void *msg)
 
     sem_up(&queue->buffer);
     sem_up(&queue->item);
+
     flag_preempcao = 0;
     return 0;
 }
@@ -605,7 +607,7 @@ int mqueue_send (mqueue_t *queue, void *msg)
 // recebe uma mensagem da fila
 int mqueue_recv (mqueue_t *queue, void *msg)
 {
-    if(queue == NULL || msg == NULL || queue->mensagens == NULL)
+    if(queue == NULL)
     {
         return -1;
     }
@@ -617,11 +619,12 @@ int mqueue_recv (mqueue_t *queue, void *msg)
     queue->qnt--;
 
     void *check = queue->mensagens;
-    int qntMsg = queue->qnt;
-    while(qntMsg > 0)
+    int qntMsg = 0;
+    while(qntMsg < queue->qnt)
     {
-        bcopy(queue->mensagens + (qntMsg * queue->tam), queue->mensagens + (qntMsg-1 * queue->tam), queue->tam);
-        qntMsg--;
+        bcopy((check + queue->tam), check, queue->tam);
+        check += queue->tam;
+        qntMsg++;
     }
 
     sem_up(&queue->buffer);

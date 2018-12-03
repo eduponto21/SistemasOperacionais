@@ -52,9 +52,9 @@ void somaBody (void * arg)
       mqueue_recv (&queueValores, &v3) ;
       printf ("               T%d: recebeu %d\n", task_id(), v3) ;
 
-      // calcula a soma e sua raiz
+      // calcula a soma e sua raiz)
       soma = v1 + v2 + v3 ;
-      raiz = sqrt (soma) ;
+      raiz = sqrt(soma);
       printf ("               T%d: %d+%d+%d = %f (raiz %f)\n",
 	      task_id(), v1, v2, v3, soma, raiz) ;
 
